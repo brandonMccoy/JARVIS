@@ -20,7 +20,10 @@ cp apps/web/.env.example  apps/web/.env       # optional VITE_PICOVOICE_ACCESS_K
 npm run dev                                   # core on 127.0.0.1:8787, web on http://127.0.0.1:5173
 ```
 
-Open http://127.0.0.1:5173, **tap to wake** (the browser needs one gesture before audio can play), then:
+If either port is already taken — usually a previous run that has not let go — both walk up to
+the next free one and say so, so check the startup output for the actual URL.
+
+Open the web URL, **tap to wake** (the browser needs one gesture before audio can play), then:
 
 | Do | Result |
 |---|---|

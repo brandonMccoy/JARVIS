@@ -3,6 +3,7 @@ import websocket from "@fastify/websocket";
 import cors from "@fastify/cors";
 import Anthropic from "@anthropic-ai/sdk";
 import { env } from "./config.js";
+import { findFreePort } from "./net.js";
 import { openDatabase } from "./store/db.js";
 import { SettingsService } from "./store/settings.js";
 import { SessionStore } from "./store/sessions.js";
@@ -80,8 +81,12 @@ async function main(): Promise<void> {
     hub.attach(socket);
   });
 
-  await app.listen({ host: env.host, port: env.port });
-  log(`J.A.R.V.I.S. core listening on ws://${env.host}:${env.port}/ws  (brain: ${client ? "Anthropic" : "OFFLINE"}, voice: ${env.elevenLabsKey ? "ElevenLabs" : "browser"})`);
+  const port = await findFreePort(env.host, env.port);
+  await app.listen({ host: env.host, port });
+  if (port !== env.port) {
+    log(`Port ${env.port} was busy; using ${port}. The web app follows JARVIS_PORT — restart 'npm run dev' if it was started separately.`);
+  }
+  log(`J.A.R.V.I.S. core listening on ws://${env.host}:${port}/ws  (brain: ${client ? "Anthropic" : "OFFLINE"}, voice: ${env.elevenLabsKey ? "ElevenLabs" : "browser"})`);
 }
 
 function isAllowedOrigin(origin: string | undefined): boolean {
