@@ -160,3 +160,71 @@ input[type="range"] { padding: 0; background: transparent; border: none; accent-
   .row { grid-template-columns: 60px 1fr; }
   .drawer { max-height: 48vh; }
 }
+
+/* ---------- account connections (docs/CONNECTIONS.md §4) ---------- */
+/* The tile stays compact; setup lives in a modal so it cannot overflow the card. */
+.acct { border-top: 1px solid var(--line2); margin-top: 2px; padding-top: 8px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.acct-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.acct-provider { font-size: 13px; color: var(--muted); }
+.acct-account { font-family: var(--mono); font-size: 11px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acct-open {
+  border: 1px solid var(--line); background: var(--accent-soft); color: var(--accent);
+  border-radius: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer; width: 100%;
+}
+.acct-open:hover { border-color: var(--accent); }
+
+.pill {
+  font-family: var(--display); font-size: 10px; font-weight: 600; letter-spacing: 0.08em;
+  text-transform: uppercase; border-radius: 999px; padding: 2px 9px;
+  border: 1px solid var(--line2); color: var(--faint); white-space: nowrap;
+}
+.pill.on { color: var(--accent); border-color: var(--line); background: var(--accent-soft); }
+.pill.bad { color: var(--gold); border-color: var(--gold); background: var(--gold-soft); }
+.pill.wait { color: var(--accent); border-color: var(--line); }
+
+/* ---------- modal ---------- */
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 60; background: rgba(4, 8, 16, 0.72); backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.modal {
+  background: var(--bg2); border: 1px solid var(--line); border-radius: 12px;
+  width: min(560px, 100%); max-height: min(80vh, 720px); display: flex; flex-direction: column;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.55); outline: none;
+}
+.modal-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 14px 16px; border-bottom: 1px solid var(--line2); flex: 0 0 auto;
+}
+.modal-head h3 { margin: 0; font-family: var(--display); font-size: 15px; font-weight: 600; letter-spacing: 0.04em; }
+.modal-close {
+  background: transparent; border: none; color: var(--faint); font-size: 22px; line-height: 1;
+  cursor: pointer; padding: 0 4px; border-radius: 4px;
+}
+.modal-close:hover { color: var(--text); }
+.modal-body { padding: 16px; overflow-y: auto; flex: 1 1 auto; }
+.modal-body .muted { font-size: 13px; color: var(--muted); margin: 0 0 10px; line-height: 1.55; }
+.modal-body .warn { color: var(--gold); font-size: 13px; margin: 0 0 10px; }
+.modal-body code { font-family: var(--mono); font-size: 12px; color: var(--accent); }
+.modal-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.modal-actions button {
+  border: 1px solid var(--line); background: var(--accent-soft); color: var(--accent);
+  border-radius: 6px; padding: 6px 14px; font-size: 13px; cursor: pointer;
+}
+.modal-actions button:disabled { opacity: 0.45; cursor: default; }
+.modal-actions button.ghost { background: transparent; color: var(--faint); border-color: var(--line2); }
+.modal-actions button.danger { background: var(--gold-soft); color: var(--gold); border-color: var(--gold); }
+
+.setup-steps { margin: 0 0 12px; padding-left: 20px; font-size: 13px; color: var(--muted); line-height: 1.6; }
+.setup-steps li { margin-bottom: 7px; }
+.setup-steps a { color: var(--accent); }
+.setup-steps small { display: block; margin-top: 3px; color: var(--faint); font-size: 12px; line-height: 1.5; }
+
+.acct-setup { border-left: 2px solid var(--line2); padding-left: 12px; margin: 12px 0; }
+.acct-field { display: block; margin-bottom: 10px; }
+.acct-field span { display: block; font-size: 12px; color: var(--faint); margin-bottom: 4px; }
+.acct-field input {
+  width: 100%; box-sizing: border-box; background: var(--bg); border: 1px solid var(--line2);
+  color: var(--text); border-radius: 6px; padding: 7px 9px; font-family: var(--mono); font-size: 12px;
+}
+.acct-field input:focus { outline: none; border-color: var(--accent); }

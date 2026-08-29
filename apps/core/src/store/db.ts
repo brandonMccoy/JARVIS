@@ -58,6 +58,22 @@ const MIGRATIONS: string[] = [
      turn_id TEXT,
      json TEXT NOT NULL
    );`,
+  // 2 — account connections (docs/CONNECTIONS.md §3). Token columns hold
+  // AES-256-GCM blobs, never plaintext; the OAuth client secret is the user's
+  // own and is stored the same way.
+  `CREATE TABLE IF NOT EXISTS connections (
+     id             TEXT PRIMARY KEY,
+     status         TEXT NOT NULL,
+     account        TEXT,
+     scopes         TEXT NOT NULL DEFAULT '',
+     client_id      TEXT,
+     client_secret  TEXT,
+     access_token   TEXT,
+     refresh_token  TEXT,
+     expires_at     INTEGER,
+     connected_at   INTEGER,
+     error          TEXT
+   );`,
 ];
 
 function migrate(db: DatabaseSync): void {

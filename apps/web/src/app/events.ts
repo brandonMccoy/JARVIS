@@ -20,6 +20,7 @@ export function handleServerEvent(e: ServerEvent): void {
         settings: e.settings,
         capabilities: e.capabilities,
         transcript: e.history,
+        connections: e.connections,
         live: null,
       });
       setVolume(e.settings.voice.volume);
@@ -102,6 +103,14 @@ export function handleServerEvent(e: ServerEvent): void {
     case "screen.request": {
       const image = screenActive() ? captureFrame() : null;
       socket.send({ type: "screen.frame", requestId: e.requestId, image: image ?? undefined, error: image ? undefined : "no frame" });
+      break;
+    }
+    case "connection.pending": {
+      s.set({ connectionPending: e.provider });
+      break;
+    }
+    case "connection.changed": {
+      s.set({ connections: e.connections, connectionPending: null });
       break;
     }
     case "session.reset": {

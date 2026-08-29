@@ -7,6 +7,7 @@ import { openDatabase } from "./store/db.js";
 import { SettingsService } from "./store/settings.js";
 import { SessionStore } from "./store/sessions.js";
 import { Brain } from "./brain/chat.js";
+import { ConnectionStore } from "./connections/store.js";
 import { Hub } from "./ws/hub.js";
 import { chooseTts } from "./voice/tts.js";
 
@@ -36,9 +37,17 @@ async function main(): Promise<void> {
       })
     : null;
 
+  const connections = new ConnectionStore({
+    db,
+    dataDir: env.dataDir,
+    onChange: (states) => hub.broadcast({ type: "connection.changed", connections: states }),
+    log,
+  });
+
   const hub = new Hub({
     settings,
     sessions,
+    connections,
     capabilities: { anthropic: Boolean(client), elevenlabs: Boolean(env.elevenLabsKey), version: env.version },
     log,
   });
@@ -46,6 +55,7 @@ async function main(): Promise<void> {
     client,
     settings,
     sessions,
+    connections,
     tts: () => chooseTts(settings.get(), env.elevenLabsKey),
     emit: hub.broadcast,
     requestScreenshot: hub.requestScreenshot,

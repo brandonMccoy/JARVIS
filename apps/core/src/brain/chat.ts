@@ -1,14 +1,15 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createHash, randomUUID } from "node:crypto";
-import { MODELS, type Activity, type ImagePayload, type ServerEvent, type Settings } from "@jarvis/shared";
+import { GOOGLE_SCOPES, MODELS, type Activity, type ImagePayload, type ServerEvent, type Settings } from "@jarvis/shared";
 import { VOICE_SAMPLE_RATE } from "../config.js";
+import type { ConnectionStore } from "../connections/store.js";
 import type { SessionStore } from "../store/sessions.js";
 import type { SettingsService } from "../store/settings.js";
 import { SentenceChunker } from "../voice/chunker.js";
 import type { TtsProvider } from "../voice/tts.js";
 import { matchIntent, type Intent } from "./intents.js";
 import { buildSystem } from "./persona.js";
-import { BUILTIN_TOOLS, executeTool } from "./tools.js";
+import { BUILTIN_TOOLS, CONNECTED_TOOLS, executeTool } from "./tools.js";
 
 type BetaMessageParam = Anthropic.Beta.BetaMessageParam;
 type BetaContentBlockParam = Anthropic.Beta.BetaContentBlockParam;
@@ -20,6 +21,7 @@ export interface BrainDeps {
   client: Anthropic | null;
   settings: SettingsService;
   sessions: SessionStore;
+  connections: ConnectionStore;
   tts: () => TtsProvider;
   emit: (e: ServerEvent) => void;
   requestScreenshot: () => Promise<ImagePayload | null>;
@@ -199,6 +201,7 @@ export class Brain {
               patchSettings: (p) => settings.patch(p),
               requestScreenshot: this.deps.requestScreenshot,
               screenShareActive: this.deps.screenShareActive,
+              connections: this.deps.connections,
             });
             sessions.audit({
               tool: use.name,
@@ -230,6 +233,22 @@ export class Brain {
     }
   }
 
+  /**
+   * PLAN §7 layer 1 (visibility): a tool only reaches Claude when its app is
+   * enabled *and* the account is connected *and* the scope was actually
+   * granted. Anything else and he'd offer a capability that cannot run.
+   */
+  private connectedTools(): BetaToolUnion[] {
+    const app = this.deps.settings.get().apps.find((a) => a.id === "calendar");
+    if (!app?.enabled || !app.read) return [];
+    const conns = this.deps.connections;
+    if (!conns.isConnected("google")) return [];
+    const allowed = new Set<string>();
+    if (conns.hasScope("google", GOOGLE_SCOPES.calendarRead)) allowed.add("calendar_agenda");
+    if (conns.hasScope("google", GOOGLE_SCOPES.mailRead)) allowed.add("mail_search");
+    return CONNECTED_TOOLS.filter((t) => allowed.has(t.name)) as BetaToolUnion[];
+  }
+
   private buildParams(s: Settings, messages: BetaMessageParam[], mode: "spoken" | "analysis"): Anthropic.Beta.MessageCreateParamsStreaming {
     const model = MODELS[s.brain.model];
     const system = buildSystem(s, {
@@ -239,7 +258,7 @@ export class Brain {
       listening: s.hud.listening,
     });
 
-    const tools: BetaToolUnion[] = [...BUILTIN_TOOLS];
+    const tools: BetaToolUnion[] = [...BUILTIN_TOOLS, ...this.connectedTools()];
     if (s.brain.webSearch) {
       tools.push({ type: model.webSearchToolType, name: "web_search", max_uses: 3 } as BetaToolUnion);
     }

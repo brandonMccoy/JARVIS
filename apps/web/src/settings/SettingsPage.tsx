@@ -2,6 +2,7 @@ import { MODELS, MODEL_ALIASES, type Settings, type SettingsPatch } from "@jarvi
 import { useStore } from "../state/store.ts";
 import { socket } from "../ws/client.ts";
 import { pickVoice } from "../voice/browserTts.ts";
+import { GoogleConnection } from "./GoogleConnection.tsx";
 
 /** Settings (PLAN §9). Personality has no page — it is voice-only. */
 export function SettingsPage() {
@@ -93,7 +94,10 @@ export function SettingsPage() {
 
       <section>
         <h2>Apps &amp; permissions</h2>
-        <p className="muted">Each app is an MCP server run by core. Toggles are stored now and enforced when the app is wired (Phase 5).</p>
+        <p className="muted">
+          Calendar &amp; Mail connects a Google account for read-only access. The remaining apps store their toggles
+          now and are enforced when wired (Phase 5).
+        </p>
         <div className="apps">
           {settings.apps.map((app) => (
             <div key={app.id} className={`app-card ${app.enabled ? "on" : ""}`}>
@@ -109,7 +113,11 @@ export function SettingsPage() {
                   Confirm writes
                 </label>
               </div>
-              <div className="app-status">Not wired yet</div>
+              {app.id === "calendar" ? (
+                app.enabled ? <GoogleConnection /> : <div className="app-status">Enable to connect an account</div>
+              ) : (
+                <div className="app-status">Not wired yet</div>
+              )}
             </div>
           ))}
         </div>

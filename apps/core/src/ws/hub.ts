@@ -2,12 +2,14 @@ import { randomUUID } from "node:crypto";
 import type { WebSocket } from "ws";
 import { parseClientEvent, type ImagePayload, type ServerEvent } from "@jarvis/shared";
 import type { Brain } from "../brain/chat.js";
+import type { ConnectionStore } from "../connections/store.js";
 import type { SessionStore } from "../store/sessions.js";
 import type { SettingsService } from "../store/settings.js";
 
 interface HubDeps {
   settings: SettingsService;
   sessions: SessionStore;
+  connections: ConnectionStore;
   capabilities: { anthropic: boolean; elevenlabs: boolean; version: string };
   log: (msg: string, extra?: unknown) => void;
 }
@@ -59,6 +61,7 @@ export class Hub {
       settings: this.deps.settings.get(),
       history: this.deps.sessions.getTranscript(),
       capabilities: this.deps.capabilities,
+      connections: this.deps.connections.publicState(),
     };
     ws.send(JSON.stringify(hello));
 
@@ -113,6 +116,26 @@ export class Hub {
         break;
       case "tool.confirm.reply":
         // Phase 5: routed to the permission gate.
+        break;
+      case "connection.configure":
+        this.deps.connections.configure(event.provider, event.clientId, event.clientSecret);
+        break;
+      case "connection.start": {
+        // Consent happens in the system browser and can take a while; tell the
+        // HUD immediately, then report the outcome through connection.changed.
+        this.broadcast({ type: "connection.pending", provider: event.provider });
+        try {
+          await this.deps.connections.connect(event.provider);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          this.deps.log("connection failed", message);
+          this.broadcast({ type: "error", message: `Could not connect ${event.provider}: ${message}` });
+          this.broadcast({ type: "connection.changed", connections: this.deps.connections.publicState() });
+        }
+        break;
+      }
+      case "connection.disconnect":
+        await this.deps.connections.disconnect(event.provider);
         break;
       case "audio.playback":
       case "client.listening":

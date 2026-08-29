@@ -1,7 +1,9 @@
 import { create } from "zustand";
 import {
+  DEFAULT_CONNECTIONS,
   DEFAULT_SETTINGS,
   type Activity,
+  type ConnectionState,
   type ListeningMode,
   type Settings,
   type TranscriptEntry,
@@ -37,6 +39,10 @@ interface State {
   sessionId: string;
   settings: Settings;
   capabilities: { anthropic: boolean; elevenlabs: boolean; version: string };
+  /** Account connections — status only; tokens never leave core. */
+  connections: ConnectionState[];
+  /** Provider whose consent is currently open in the system browser. */
+  connectionPending: string | null;
   activity: Activity;
   /** Client-side listening state (mic open) — shown as "Listening…" locally. */
   micOpen: boolean;
@@ -63,6 +69,8 @@ export const useStore = create<State>((set, get) => ({
   sessionId: "",
   settings: DEFAULT_SETTINGS,
   capabilities: { anthropic: false, elevenlabs: false, version: "" },
+  connections: DEFAULT_CONNECTIONS,
+  connectionPending: null,
   activity: { kind: "idle" },
   micOpen: false,
   interim: "",

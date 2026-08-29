@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ConnectionProviderSchema, ConnectionStateSchema } from "./connections.js";
 import { SettingsSchema, SettingsPatchSchema, ListeningModeSchema } from "./settings.js";
 
 /** What J.A.R.V.I.S. is doing right now (PLAN §6.2). Derived from real stream events, never guessed. */
@@ -62,6 +63,15 @@ export const ClientEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("tool.confirm.reply"), id: z.string(), approved: z.boolean() }),
   z.object({ type: z.literal("audio.playback"), turnId: z.string(), seq: z.number(), state: z.enum(["started", "ended"]) }),
   z.object({ type: z.literal("client.listening"), active: z.boolean() }),
+  /** Store the user's own OAuth client (docs/CONNECTIONS.md §1 — clients are BYO). */
+  z.object({
+    type: z.literal("connection.configure"),
+    provider: ConnectionProviderSchema,
+    clientId: z.string().min(1),
+    clientSecret: z.string().min(1),
+  }),
+  z.object({ type: z.literal("connection.start"), provider: ConnectionProviderSchema }),
+  z.object({ type: z.literal("connection.disconnect"), provider: ConnectionProviderSchema }),
 ]);
 export type ClientEvent = z.infer<typeof ClientEventSchema>;
 
@@ -79,6 +89,7 @@ export const ServerEventSchema = z.discriminatedUnion("type", [
       elevenlabs: z.boolean(),
       version: z.string(),
     }),
+    connections: z.array(ConnectionStateSchema).default([]),
   }),
   z.object({ type: z.literal("assistant.turn"), turnId: z.string(), replyTo: z.string() }),
   z.object({ type: z.literal("assistant.delta"), turnId: z.string(), text: z.string() }),
@@ -100,6 +111,9 @@ export const ServerEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("tool.confirm"), id: z.string(), app: z.string(), action: z.string() }),
   z.object({ type: z.literal("screen.request"), requestId: z.string() }),
   z.object({ type: z.literal("settings.changed"), settings: SettingsSchema }),
+  z.object({ type: z.literal("connection.changed"), connections: z.array(ConnectionStateSchema) }),
+  /** Consent is in flight in the system browser; the HUD shows a waiting state. */
+  z.object({ type: z.literal("connection.pending"), provider: ConnectionProviderSchema }),
   z.object({ type: z.literal("session.reset"), sessionId: z.string() }),
   z.object({ type: z.literal("error"), message: z.string(), spoken: z.string().optional() }),
   z.object({

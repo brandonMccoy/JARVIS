@@ -1,5 +1,6 @@
 export * from "./models.js";
 export * from "./apps.js";
+export * from "./connections.js";
 export * from "./settings.js";
 export * from "./events.js";
 
