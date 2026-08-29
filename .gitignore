@@ -1,0 +1,9 @@
+node_modules/
+dist/
+*.log
+.env
+.env.local
+apps/core/data/
+apps/web/.env
+.DS_Store
+Thumbs.db

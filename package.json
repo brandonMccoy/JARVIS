@@ -1,0 +1,24 @@
+{
+  "name": "jarvis",
+  "private": true,
+  "version": "0.1.0",
+  "description": "J.A.R.V.I.S. — a voice-first assistant with a Claude brain and a neural-network orb.",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:core": "npm run dev -w @jarvis/core",
+    "dev:web": "npm run dev -w @jarvis/web",
+    "build": "npm run build -w @jarvis/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "start:core": "npm run start -w @jarvis/core",
+    "start": "npm run typecheck && npm run dev"
+  },
+  "engines": {
+    "node": ">=22.13"
+  }
+}
