@@ -362,9 +362,11 @@ and re-checks on every call, never at the moment a folder was added. Files that
 look like credentials (`.env`, keys, `.ssh`) are refused even inside a grant,
 and are not listed or searchable either.
 
-Tools: `fs_list`, `fs_read`, `fs_search` (read) and `fs_write`, `fs_rename`,
-`fs_delete` (write). The write set is withheld from the request entirely until
-some folder is writable.
+Tools: `fs_list`, `fs_read`, `fs_search` (read) and `fs_write`, `fs_mkdir`,
+`fs_rename`, `fs_delete` (write). The write set is withheld from the request
+entirely until some folder is writable. `fs_mkdir` creates one level at a time —
+the parent must exist, which is the same rule `fs_write` follows and is what
+keeps the containment check honest, since the parent is what gets resolved.
 
 **Deletion is recoverable by construction.** `fs_delete` never calls `unlink`;
 it moves the item to the Recycle Bin through PowerShell's

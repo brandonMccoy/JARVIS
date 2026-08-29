@@ -192,6 +192,20 @@ export const FILESYSTEM_TOOLS: Tool[] = [
     strict: true,
   },
   {
+    name: "fs_mkdir",
+    description:
+      "Create a new folder inside a folder Sir has marked writable. The parent folder must already exist, so build nested folders one level at a time.",
+    input_schema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Absolute path of the folder to create, including its new name." },
+      },
+      required: ["path"],
+      additionalProperties: false,
+    },
+    strict: true,
+  },
+  {
     name: "fs_rename",
     description:
       "Rename or move a file or folder. Both the old and new paths must be inside folders Sir has marked writable, and the new path must not already exist.",
@@ -223,7 +237,7 @@ export const FILESYSTEM_TOOLS: Tool[] = [
 ];
 
 /** Tools that change the disk — offered only when some folder is writable. */
-export const FS_WRITE_TOOLS = new Set(["fs_write", "fs_rename", "fs_delete"]);
+export const FS_WRITE_TOOLS = new Set(["fs_write", "fs_mkdir", "fs_rename", "fs_delete"]);
 
 export async function executeTool(name: string, input: unknown, ctx: ToolContext): Promise<ToolOutcome> {
   const args = (input ?? {}) as Record<string, unknown>;
@@ -379,6 +393,12 @@ export async function executeTool(name: string, input: unknown, ctx: ToolContext
           content: `${existed ? "Overwrote" : "Created"} ${file} (${formatBytes(bytes)}).`,
           summary: `Files: ${existed ? "overwrote" : "created"} ${basename(file)}`,
         };
+      });
+
+    case "fs_mkdir":
+      return withFolders(ctx, async (grants) => {
+        const { path: made } = await files.createFolder(grants, String(args.path ?? ""));
+        return { content: `Created the folder ${made}.`, summary: `Files: created folder ${basename(made)}` };
       });
 
     case "fs_rename":

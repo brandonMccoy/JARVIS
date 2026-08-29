@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { FOLDERS_KEY, KNOWN_APPS, folderGrants, type AppPermission } from "@jarvis/shared";
 import { execFileSync } from "node:child_process";
-import { deleteEntry, listDir, readFile, renameEntry, search, writeFile, MAX_READ_BYTES } from "../src/fs/files.js";
+import { createFolder, deleteEntry, listDir, readFile, renameEntry, search, writeFile, MAX_READ_BYTES } from "../src/fs/files.js";
 import { recycleSupported } from "../src/fs/recycle.js";
 import { ScopeError } from "../src/fs/scope.js";
 import { FILESYSTEM_TOOLS, FS_WRITE_TOOLS } from "../src/brain/tools.js";
@@ -93,8 +93,8 @@ test("an interrupted write leaves no stray temp files", async () => {
 
 test("every disk-changing tool is withheld until a folder is writable", () => {
   const names = FILESYSTEM_TOOLS.map((t) => t.name);
-  assert.deepEqual(names, ["fs_list", "fs_read", "fs_search", "fs_write", "fs_rename", "fs_delete"]);
-  assert.deepEqual([...FS_WRITE_TOOLS].sort(), ["fs_delete", "fs_rename", "fs_write"]);
+  assert.deepEqual(names, ["fs_list", "fs_read", "fs_search", "fs_write", "fs_mkdir", "fs_rename", "fs_delete"]);
+  assert.deepEqual([...FS_WRITE_TOOLS].sort(), ["fs_delete", "fs_mkdir", "fs_rename", "fs_write"]);
 
   // Mirrors Brain.filesystemTools(): write tools are filtered out when no grant
   // permits writing, so Claude never sees a capability it cannot use.
@@ -198,4 +198,64 @@ test("a deleted file leaves the disk and arrives in the Recycle Bin", { skip: !r
     { encoding: "utf8", windowsHide: true },
   );
   assert.ok(bin.includes(marker), "the deleted file should be restorable from the Recycle Bin");
+});
+
+// ---------------------------------------------------------------------------
+// Folders
+// ---------------------------------------------------------------------------
+
+test("creating a folder works, and refuses to clobber an existing one", async () => {
+  const dir = fixture();
+  const made = path.join(dir, "Recipes");
+
+  const res = await createFolder(rw(dir), made);
+  assert.equal(res.path, made);
+  assert.equal(fs.statSync(made).isDirectory(), true);
+
+  await assert.rejects(() => createFolder(rw(dir), made), /already exists/);
+  await assert.rejects(() => createFolder(rw(dir), path.join(dir, "sub")), /already exists/);
+});
+
+test("creating a folder needs a writable grant and an existing parent", async () => {
+  const dir = fixture();
+  await assert.rejects(() => createFolder(ro(dir), path.join(dir, "Nope")), /read-only/);
+  assert.equal(fs.existsSync(path.join(dir, "Nope")), false);
+
+  // Nested creation is two calls: the parent must exist first.
+  await assert.rejects(() => createFolder(rw(dir), path.join(dir, "a", "b")), /parent of .* does not exist/);
+
+  const outside = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "jarvis-out-")));
+  await assert.rejects(() => createFolder(rw(dir), path.join(outside, "x")), /outside every granted folder/);
+});
+
+test("a folder can be created, renamed and then recycled", { skip: !recycleSupported() }, async () => {
+  const dir = fixture();
+  const marker = `jarvis-folder-${Date.now()}`;
+  const first = path.join(dir, `${marker}-old`);
+  const renamed = path.join(dir, marker);
+
+  await createFolder(rw(dir), first);
+  fs.writeFileSync(path.join(first, "inside.txt"), "contents come along");
+
+  await renameEntry(rw(dir), first, renamed);
+  assert.equal(fs.existsSync(first), false);
+  assert.equal(fs.readFileSync(path.join(renamed, "inside.txt"), "utf8"), "contents come along");
+
+  // DeleteDirectory is a different branch of the PowerShell script to
+  // DeleteFile, so the folder path is asserted separately.
+  const res = await deleteEntry(rw(dir), renamed);
+  assert.equal(res.kind, "folder");
+  assert.equal(fs.existsSync(renamed), false);
+
+  const bin = execFileSync(
+    "powershell.exe",
+    [
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
+      "$s=(New-Object -ComObject Shell.Application).Namespace(0xA); $s.Items() | ForEach-Object { $_.Name }",
+    ],
+    { encoding: "utf8", windowsHide: true },
+  );
+  assert.ok(bin.includes(marker), "a deleted folder should be restorable from the Recycle Bin too");
 });

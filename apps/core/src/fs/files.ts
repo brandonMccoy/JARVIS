@@ -206,6 +206,24 @@ export async function deleteEntry(
 }
 
 /**
+ * Create a folder.
+ *
+ * One level at a time: `resolveWithin` allows exactly one missing segment, so
+ * the parent must already exist. That is the same rule `fs_write` follows, and
+ * it keeps the containment check honest — the parent is what gets resolved, so
+ * a path that would land outside a grant is refused before anything is created.
+ * Nested folders are two calls, deliberately.
+ */
+export async function createFolder(grants: FolderGrant[], requested: string): Promise<{ path: string }> {
+  const dir = await resolveWithin(grants, requested, "write");
+  if (await fs.stat(dir).then(() => true).catch(() => false)) {
+    throw new Error(`${path.basename(dir)} already exists.`);
+  }
+  await fs.mkdir(dir);
+  return { path: dir };
+}
+
+/**
  * Rename or move. Both ends must sit in writable grants, so a file cannot be
  * moved out of the folders it was shared under.
  */
