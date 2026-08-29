@@ -46,8 +46,10 @@ export const BUILTIN_TOOLS: Tool[] = [
     input_schema: {
       type: "object",
       properties: {
-        honesty: { type: "integer", minimum: 0, maximum: 100, description: "Candor. 100 = unvarnished, 0 = maximally diplomatic." },
-        humor: { type: "integer", minimum: 0, maximum: 100, description: "Wit. 100 = a quip every turn, 0 = none." },
+        // Ranges live in the description, not as `minimum`/`maximum`: the API
+        // rejects those keywords on integer properties. The handlers clamp.
+        honesty: { type: "integer", description: "Candor, 0-100. 100 = unvarnished, 0 = maximally diplomatic." },
+        humor: { type: "integer", description: "Wit, 0-100. 100 = a quip every turn, 0 = none." },
       },
       additionalProperties: false,
     },
@@ -87,7 +89,7 @@ export const CONNECTED_TOOLS: Tool[] = [
     input_schema: {
       type: "object",
       properties: {
-        days: { type: "integer", minimum: 1, maximum: 14, description: "How many days from today to cover. 1 = today only." },
+        days: { type: "integer", description: "How many days from today to cover, 1-14. 1 = today only." },
       },
       required: ["days"],
       additionalProperties: false,
@@ -102,7 +104,7 @@ export const CONNECTED_TOOLS: Tool[] = [
       type: "object",
       properties: {
         query: { type: "string", description: "A Gmail search query. Use 'is:unread' for unread mail." },
-        limit: { type: "integer", minimum: 1, maximum: 20, description: "How many messages to return." },
+        limit: { type: "integer", description: "How many messages to return, 1-20. Defaults to 10." },
       },
       required: ["query"],
       additionalProperties: false,
