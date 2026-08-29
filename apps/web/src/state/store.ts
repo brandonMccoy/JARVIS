@@ -4,6 +4,7 @@ import {
   DEFAULT_SETTINGS,
   type Activity,
   type ConnectionState,
+  type FsListing,
   type ListeningMode,
   type Settings,
   type TranscriptEntry,
@@ -43,6 +44,8 @@ interface State {
   connections: ConnectionState[];
   /** Provider whose consent is currently open in the system browser. */
   connectionPending: string | null;
+  /** Last directory listing from core, for the Filesystem folder picker. */
+  fsListing: FsListing | null;
   activity: Activity;
   /** Client-side listening state (mic open) — shown as "Listening…" locally. */
   micOpen: boolean;
@@ -71,6 +74,7 @@ export const useStore = create<State>((set, get) => ({
   capabilities: { anthropic: false, elevenlabs: false, version: "" },
   connections: DEFAULT_CONNECTIONS,
   connectionPending: null,
+  fsListing: null,
   activity: { kind: "idle" },
   micOpen: false,
   interim: "",

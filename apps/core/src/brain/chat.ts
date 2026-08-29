@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createHash, randomUUID } from "node:crypto";
-import { GOOGLE_SCOPES, MODELS, mailBodiesEnabled, type Activity, type ImagePayload, type ServerEvent, type Settings } from "@jarvis/shared";
+import { GOOGLE_SCOPES, MODELS, folderGrants, mailBodiesEnabled, type Activity, type ImagePayload, type ServerEvent, type Settings } from "@jarvis/shared";
 import { VOICE_SAMPLE_RATE } from "../config.js";
 import type { ConnectionStore } from "../connections/store.js";
 import type { SessionStore } from "../store/sessions.js";
@@ -9,7 +9,7 @@ import { SentenceChunker } from "../voice/chunker.js";
 import type { TtsProvider } from "../voice/tts.js";
 import { matchIntent, type Intent } from "./intents.js";
 import { buildSystem } from "./persona.js";
-import { BUILTIN_TOOLS, CONNECTED_TOOLS, executeTool } from "./tools.js";
+import { BUILTIN_TOOLS, CONNECTED_TOOLS, FILESYSTEM_TOOLS, executeTool } from "./tools.js";
 
 type BetaMessageParam = Anthropic.Beta.BetaMessageParam;
 type BetaContentBlockParam = Anthropic.Beta.BetaContentBlockParam;
@@ -255,16 +255,38 @@ export class Brain {
     return CONNECTED_TOOLS.filter((t) => allowed.has(t.name)) as BetaToolUnion[];
   }
 
+  /**
+   * Layer 1 for the Filesystem app. Grants are the permission, so with none
+   * configured Claude never learns the tools exist — and `fs_write` stays out
+   * of the payload entirely until some folder is actually writable.
+   */
+  private filesystemTools(): BetaToolUnion[] {
+    const app = this.deps.settings.get().apps.find((a) => a.id === "filesystem");
+    if (!app?.enabled) return [];
+    const grants = folderGrants(app);
+    if (!grants.length) return [];
+    const writable = grants.some((g) => g.write);
+    return FILESYSTEM_TOOLS.filter((t) => writable || t.name !== "fs_write") as BetaToolUnion[];
+  }
+
+  /** Only what the gate would actually allow, so the prompt cannot overpromise. */
+  private sharedFolders(): { path: string; write: boolean }[] {
+    const app = this.deps.settings.get().apps.find((a) => a.id === "filesystem");
+    if (!app?.enabled) return [];
+    return folderGrants(app).map((g) => ({ path: g.path, write: g.write }));
+  }
+
   private buildParams(s: Settings, messages: BetaMessageParam[], mode: "spoken" | "analysis"): Anthropic.Beta.MessageCreateParamsStreaming {
     const model = MODELS[s.brain.model];
     const system = buildSystem(s, {
       now: new Date(),
       screenShareActive: this.deps.screenShareActive(),
       enabledApps: s.apps.filter((a) => a.enabled).map((a) => a.label),
+      sharedFolders: this.sharedFolders(),
       listening: s.hud.listening,
     });
 
-    const tools: BetaToolUnion[] = [...BUILTIN_TOOLS, ...this.connectedTools()];
+    const tools: BetaToolUnion[] = [...BUILTIN_TOOLS, ...this.connectedTools(), ...this.filesystemTools()];
     if (s.brain.webSearch) {
       tools.push({ type: model.webSearchToolType, name: "web_search", max_uses: 3 } as BetaToolUnion);
     }

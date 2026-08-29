@@ -5,6 +5,7 @@ import type { Brain } from "../brain/chat.js";
 import type { ConnectionStore } from "../connections/store.js";
 import type { SessionStore } from "../store/sessions.js";
 import type { SettingsService } from "../store/settings.js";
+import { browse } from "../fs/browse.js";
 
 interface HubDeps {
   settings: SettingsService;
@@ -117,6 +118,12 @@ export class Hub {
       case "tool.confirm.reply":
         // Phase 5: routed to the permission gate.
         break;
+      case "fs.browse": {
+        // Broadcast rather than reply to one socket: `handle` is not given the
+        // sender, and every connection is the same user on loopback anyway.
+        this.broadcast({ type: "fs.listing", ...(await browse(event.path)) });
+        break;
+      }
       case "connection.configure":
         this.deps.connections.configure(event.provider, event.clientId, event.clientSecret);
         break;

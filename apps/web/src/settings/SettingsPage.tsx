@@ -13,6 +13,7 @@ import { socket } from "../ws/client.ts";
 import { pickVoice } from "../voice/browserTts.ts";
 import { GoogleConnection } from "./GoogleConnection.tsx";
 import { Modal } from "../ui/Modal.tsx";
+import { FolderGrants } from "./FolderGrants.tsx";
 
 /** Settings (PLAN §9). Personality has no page — it is voice-only. */
 export function SettingsPage() {
@@ -115,15 +116,25 @@ export function SettingsPage() {
                 <strong>{app.label}</strong>
                 <Toggle value={app.enabled} onChange={(v) => patch({ apps: settings.apps.map((a) => (a.id === app.id ? { ...a, enabled: v } : a)) })} />
               </div>
-              <div className="chips">
-                <Chip on={app.read} label="Read" onClick={() => patch({ apps: settings.apps.map((a) => (a.id === app.id ? { ...a, read: !a.read } : a)) })} />
-                <Chip on={app.write} label="Write" gold onClick={() => patch({ apps: settings.apps.map((a) => (a.id === app.id ? { ...a, write: !a.write } : a)) })} />
-                <label className="chk">
-                  <input type="checkbox" checked={app.confirmWrites} onChange={(e) => patch({ apps: settings.apps.map((a) => (a.id === app.id ? { ...a, confirmWrites: e.target.checked } : a)) })} />
-                  Confirm writes
-                </label>
-              </div>
-              {app.id === "calendar" ? (
+              {/* Filesystem authorises per folder, so app-level chips would be
+                  a second, contradictory source of truth. Other apps keep them. */}
+              {app.id === "filesystem" ? null : (
+                <div className="chips">
+                  <Chip on={app.read} label="Read" onClick={() => patch({ apps: settings.apps.map((a) => (a.id === app.id ? { ...a, read: !a.read } : a)) })} />
+                  <Chip on={app.write} label="Write" gold onClick={() => patch({ apps: settings.apps.map((a) => (a.id === app.id ? { ...a, write: !a.write } : a)) })} />
+                  <label className="chk">
+                    <input type="checkbox" checked={app.confirmWrites} onChange={(e) => patch({ apps: settings.apps.map((a) => (a.id === app.id ? { ...a, confirmWrites: e.target.checked } : a)) })} />
+                    Confirm writes
+                  </label>
+                </div>
+              )}
+              {app.id === "filesystem" ? (
+                app.enabled ? (
+                  <FolderGrants app={app} apps={settings.apps} patch={patch} />
+                ) : (
+                  <div className="app-status">Enable to share folders</div>
+                )
+              ) : app.id === "calendar" ? (
                 app.enabled ? (
                   <>
                     <GoogleConnection />

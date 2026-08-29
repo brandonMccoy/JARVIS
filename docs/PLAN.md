@@ -339,6 +339,31 @@ type AppPermission = {
 };
 ```
 
+### 6.2a Filesystem: per-folder grants (supersedes app-level read/write for that app)
+
+The Filesystem app does **not** use `read` / `write` / `confirmWrites`. Access is
+a list of granted folders, each recursive and each carrying its own `write`
+flag:
+
+```ts
+scope: { folders: { path: string; write: boolean }[] }
+```
+
+Why the departure: a confirmation before every write is a prompt you learn to
+say yes to without reading, whereas "this folder is writable, that one is not"
+is a decision made once, deliberately, while looking at the list. It also means
+the app has no need of the confirmation flow (J5.7).
+
+Enforcement is one choke point — `apps/core/src/fs/scope.ts` — which realpaths
+both the target and the grant root before comparing, so symlinks and Windows
+junctions are judged on where they land; uses `path.relative` rather than
+`startsWith`, so a grant on `C:\proj` does not also grant `C:\proj-secrets`;
+and re-checks on every call, never at the moment a folder was added. Files that
+look like credentials (`.env`, keys, `.ssh`) are refused even inside a grant,
+and are not listed or searchable either.
+
+The other apps keep the chips in §6.2 unchanged.
+
 ### 6.3 Enforcement: three layers
 1. **Visibility.** Disabled apps' tools are never sent to Claude. Tools are classified read/write from MCP annotations (`readOnlyHint`, `destructiveHint`) plus a manual override map; `write=false` strips write tools from the list.
 2. **Runtime gate.** The tool router re-checks permission on every call (defence against stale tool lists). With `confirmWrites`, it emits `tool.confirm` → J.A.R.V.I.S. says *"Shall I send that, Sir?"* and waits for a yes.

@@ -105,6 +105,11 @@ export function handleServerEvent(e: ServerEvent): void {
       socket.send({ type: "screen.frame", requestId: e.requestId, image: image ?? undefined, error: image ? undefined : "no frame" });
       break;
     }
+    case "fs.listing": {
+      const { type: _type, ...listing } = e;
+      s.set({ fsListing: listing });
+      break;
+    }
     case "connection.pending": {
       s.set({ connectionPending: e.provider });
       break;

@@ -291,7 +291,7 @@ Nothing here ships. Every spike ends with a number or a decision written into `d
 | J5.8 | Parallel tool results returned in a **single** user message | S | J5.5 | Two concurrent calls produce one user message with both results. |
 | J5.9 | Apps page — cards, Enabled/Read/Write chips, confirm-writes checkbox | L | J5.1,J0.21 | Toggles persist and immediately affect the next turn. |
 | J5.10 | Apps page — per-app scope editor (directories, repos) + recent-activity drawer | L | J5.9,J5.6 | Scope limits are enforced by the gate, not just displayed. |
-| J5.11 | Wire filesystem MCP server with scoped directories | M | J5.10 | Reads inside scope succeed; outside scope is denied and explained. |
+| J5.11 | ~~Wire filesystem MCP server with scoped directories~~ **Done, natively:** per-folder grants with a single containment choke point, folder picker served by core, read/search/write tools. Not the MCP server — its allowed-directory model has no per-folder write flag (PLAN §6.2a) | M | J5.10 | Reads inside scope succeed; outside scope is denied and explained. Covered by `fs-scope.test.ts` and `fs-tools.test.ts`. |
 | J5.12 | Wire GitHub MCP server (PAT in core `.env`) | M | J5.3 | "Any open PRs?" answers correctly; write requires confirmation. |
 | J5.13 | Security pass — confirm `127.0.0.1` bind, token handshake, origin check, and that a denied tool truly cannot execute | M | J0.9,J5.5 | Written checklist, each item verified by hand. |
 

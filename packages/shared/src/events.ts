@@ -42,6 +42,21 @@ export type TranscriptEntry = z.infer<typeof TranscriptEntrySchema>;
 // ---------------------------------------------------------------------------
 // Client → server
 // ---------------------------------------------------------------------------
+/**
+ * A directory listing for the Filesystem folder picker. Directory names only —
+ * never file names, never contents.
+ */
+export const FsListingSchema = z.object({
+  /** Absolute and resolved. Absent at the top level, where `entries` are the roots. */
+  path: z.string().optional(),
+  /** Absent at a drive or filesystem root. */
+  parent: z.string().optional(),
+  entries: z.array(z.object({ name: z.string(), path: z.string() })),
+  error: z.string().optional(),
+});
+
+export type FsListing = z.infer<typeof FsListingSchema>;
+
 export const ClientEventSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("user.utterance"),
@@ -61,6 +76,15 @@ export const ClientEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("settings.patch"), patch: SettingsPatchSchema }),
   z.object({ type: z.literal("session.new") }),
   z.object({ type: z.literal("tool.confirm.reply"), id: z.string(), approved: z.boolean() }),
+  /**
+   * Directory listing for the folder picker. A browser tab cannot produce an
+   * absolute path — `webkitdirectory` yields relative names — so core does the
+   * walking and the user picks from what it reports. This is a *settings* path,
+   * deliberately not bound by the granted folders: it is how folders get
+   * granted in the first place. It returns directory names only, never file
+   * contents.
+   */
+  z.object({ type: z.literal("fs.browse"), path: z.string().optional() }),
   z.object({ type: z.literal("audio.playback"), turnId: z.string(), seq: z.number(), state: z.enum(["started", "ended"]) }),
   z.object({ type: z.literal("client.listening"), active: z.boolean() }),
   /** Store the user's own OAuth client (docs/CONNECTIONS.md §1 — clients are BYO). */
@@ -109,6 +133,7 @@ export const ServerEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("tool.call"), turnId: z.string(), name: z.string(), input: z.unknown() }),
   z.object({ type: z.literal("tool.result"), turnId: z.string(), name: z.string(), ok: z.boolean(), summary: z.string() }),
   z.object({ type: z.literal("tool.confirm"), id: z.string(), app: z.string(), action: z.string() }),
+  FsListingSchema.extend({ type: z.literal("fs.listing") }),
   z.object({ type: z.literal("screen.request"), requestId: z.string() }),
   z.object({ type: z.literal("settings.changed"), settings: SettingsSchema }),
   z.object({ type: z.literal("connection.changed"), connections: z.array(ConnectionStateSchema) }),

@@ -229,3 +229,16 @@ input[type="range"] { padding: 0; background: transparent; border: none; accent-
   color: var(--text); border-radius: 6px; padding: 7px 9px; font-family: var(--mono); font-size: 12px;
 }
 .acct-field input:focus { outline: none; border-color: var(--accent); }
+
+/* Filesystem app — folder grants and the picker. */
+.grants { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.grants li { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+.grants code { font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; }
+.grant-actions { display: flex; align-items: center; gap: 4px; flex: none; }
+.grant-remove { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 15px; line-height: 1; padding: 0 4px; }
+.grant-remove:hover { color: var(--danger, #e06c6c); }
+.picker-path { margin: 10px 0 6px; font-size: 12px; }
+.picker { list-style: none; margin: 0; padding: 0; max-height: 260px; overflow-y: auto; border: 1px solid var(--line, #1d2b3f); border-radius: 4px; }
+.picker li button { display: block; width: 100%; text-align: left; background: none; border: 0; color: inherit; padding: 6px 10px; cursor: pointer; font-size: 13px; }
+.picker li button:hover { background: rgba(255, 255, 255, 0.05); }
+.picker li.muted { padding: 10px; font-size: 12.5px; }

@@ -54,6 +54,8 @@ export interface PersonaContext {
   now: Date;
   screenShareActive: boolean;
   enabledApps: string[];
+  /** Absolute paths of shared folders, with whether each may be written to. */
+  sharedFolders?: { path: string; write: boolean }[];
   listening: Settings["hud"]["listening"];
 }
 
@@ -71,11 +73,20 @@ export function buildSystem(settings: Settings, ctx: PersonaContext): Anthropic.
     ctx.enabledApps.length
       ? `Connected apps: ${ctx.enabledApps.join(", ")}. Confirm before any write action.`
       : "No external apps are connected yet; do not claim to have read files, mail, or calendars.",
+    ctx.sharedFolders?.length
+      ? [
+          "Shared folders — the only paths the fs_ tools can reach, along with everything inside them:",
+          ...ctx.sharedFolders!.map((f) => `  ${f.path}  (${f.write ? "read and write" : "read only"})`),
+          `Always use these absolute paths. Never guess a path from ${H}'s wording; if what they name is not under one of these, say so rather than trying.`,
+        ].join("\n")
+      : "",
     ctx.screenShareActive
       ? "A screen share is active. You may call take_screenshot to look at it when asked about the screen."
       : `No screen share is active. If ${H} asks about the screen, ask them to press the View Screen control first; you cannot start a share yourself.`,
     `Current local time: ${ctx.now.toLocaleString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}.`,
-  ].join("\n\n");
+  ]
+    .filter(Boolean) // the shared-folders block is empty when nothing is shared
+    .join("\n\n");
 
   return [
     { type: "text", text: stable, cache_control: { type: "ephemeral" } },

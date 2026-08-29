@@ -1,7 +1,9 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { GOOGLE_SCOPES, MODELS, isModelAlias, type ImagePayload, type Settings, type SettingsPatch } from "@jarvis/shared";
+import { GOOGLE_SCOPES, MODELS, folderGrants, isModelAlias, type FolderGrant, type ImagePayload, type Settings, type SettingsPatch } from "@jarvis/shared";
 import * as google from "../connections/google.js";
 import type { ConnectionStore } from "../connections/store.js";
+import * as files from "../fs/files.js";
+import { ScopeError } from "../fs/scope.js";
 
 type Tool = Anthropic.Beta.BetaTool;
 type ToolResultContent = Anthropic.Beta.BetaToolResultBlockParam["content"];
@@ -126,6 +128,71 @@ export const CONNECTED_TOOLS: Tool[] = [
   },
 ];
 
+/**
+ * Filesystem tools (docs/PLAN.md §7). Access is per folder, so these appear
+ * only when at least one folder is granted, and `fs_write` only when at least
+ * one of those folders is writable.
+ */
+export const FILESYSTEM_TOOLS: Tool[] = [
+  {
+    name: "fs_list",
+    description:
+      "List the contents of a folder Sir has shared. Use it to see what is there before reading. Only the shared folders and their subfolders are reachable.",
+    input_schema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Absolute path to a folder inside a shared folder." },
+      },
+      required: ["path"],
+      additionalProperties: false,
+    },
+    strict: true,
+  },
+  {
+    name: "fs_read",
+    description:
+      "Read a text file from a shared folder. Long files are truncated; binary files and anything that looks like credentials are refused.",
+    input_schema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Absolute path to the file." },
+      },
+      required: ["path"],
+      additionalProperties: false,
+    },
+    strict: true,
+  },
+  {
+    name: "fs_search",
+    description:
+      "Search the shared folders for a filename or a line of text. Use this when Sir does not know where something is.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Text to look for in file names and file contents." },
+        path: { type: "string", description: "Optional folder to search within. Omit to search every shared folder." },
+      },
+      required: ["query"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "fs_write",
+    description:
+      "Create or overwrite a text file. Only folders Sir has marked writable will accept this; the file's folder must already exist. This replaces the whole file, so read it first if you mean to keep what is there.",
+    input_schema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Absolute path to the file to write." },
+        content: { type: "string", description: "The complete new contents of the file." },
+      },
+      required: ["path", "content"],
+      additionalProperties: false,
+    },
+    strict: true,
+  },
+];
+
 export async function executeTool(name: string, input: unknown, ctx: ToolContext): Promise<ToolOutcome> {
   const args = (input ?? {}) as Record<string, unknown>;
   switch (name) {
@@ -240,6 +307,47 @@ export async function executeTool(name: string, input: unknown, ctx: ToolContext
         };
       });
     }
+
+    case "fs_list":
+      return withFolders(ctx, async (grants) => {
+        const { path: dir, entries, truncated } = await files.listDir(grants, String(args.path ?? ""));
+        if (!entries.length) return { content: `${dir} is empty.`, summary: "Files: empty folder" };
+        const lines = entries.map((e) => (e.kind === "dir" ? `${e.name}/` : `${e.name}  (${formatBytes(e.size ?? 0)})`));
+        const note = truncated ? `\n\n(Showing the first ${files.MAX_ENTRIES}.)` : "";
+        return { content: `${dir}\n\n${lines.join("\n")}${note}`, summary: `Files: ${entries.length} in ${basename(dir)}` };
+      });
+
+    case "fs_read":
+      return withFolders(ctx, async (grants) => {
+        const { path: file, text, truncated } = await files.readFile(grants, String(args.path ?? ""));
+        const note = truncated ? "\n\n(File truncated.)" : "";
+        return { content: `${file}\n\n${text}${note}`, summary: `Files: read ${basename(file)}` };
+      });
+
+    case "fs_search":
+      return withFolders(ctx, async (grants) => {
+        const query = String(args.query ?? "").trim();
+        if (!query) return { content: "Give me something to search for.", isError: true, summary: "Files: empty query" };
+        const where = args.path === undefined ? undefined : String(args.path);
+        const { matches, truncated } = await files.search(grants, query, where);
+        if (!matches.length) return { content: `Nothing matching "${query}".`, summary: "Files: no matches" };
+        const lines = matches.map((m) => (m.line ? `${m.file}:${m.line}  ${m.text}` : m.file));
+        const note = truncated ? `\n\n(Stopped at ${files.MAX_MATCHES} matches.)` : "";
+        return { content: lines.join("\n") + note, summary: `Files: ${matches.length} match${matches.length === 1 ? "" : "es"}` };
+      });
+
+    case "fs_write":
+      return withFolders(ctx, async (grants) => {
+        const { path: file, bytes, existed } = await files.writeFile(
+          grants,
+          String(args.path ?? ""),
+          String(args.content ?? ""),
+        );
+        return {
+          content: `${existed ? "Overwrote" : "Created"} ${file} (${formatBytes(bytes)}).`,
+          summary: `Files: ${existed ? "overwrote" : "created"} ${basename(file)}`,
+        };
+      });
     default:
       return { content: `Unknown tool ${name}.`, isError: true, summary: `Unknown tool ${name}` };
   }
@@ -249,6 +357,47 @@ export async function executeTool(name: string, input: unknown, ctx: ToolContext
  * Wraps a connected-account call so every failure comes back as something he
  * can say out loud, rather than a stack trace or a silent empty result.
  */
+const basename = (p: string): string => p.split(/[\\/]/).filter(Boolean).pop() ?? p;
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+/**
+ * PLAN §7 layer 2 for the Filesystem app: grants are re-read from settings on
+ * every call and re-checked inside `resolveWithin`, so a tool list that went
+ * stale — or a folder revoked mid-conversation — cannot be used.
+ *
+ * A ScopeError is a refusal, not a crash: it carries wording meant to be said
+ * out loud, and never names a path outside the shared folders.
+ */
+async function withFolders(
+  ctx: ToolContext,
+  run: (grants: FolderGrant[]) => Promise<ToolOutcome>,
+): Promise<ToolOutcome> {
+  const app = ctx.settings().apps.find((a) => a.id === "filesystem");
+  if (!app?.enabled) {
+    return { content: "The Filesystem app is switched off.", isError: true, summary: "Files: app disabled" };
+  }
+  const grants = folderGrants(app);
+  if (!grants.length) {
+    return {
+      content: "No folders have been shared with me. Sir can add one under Settings → Apps → Filesystem.",
+      isError: true,
+      summary: "Files: no folders granted",
+    };
+  }
+  try {
+    return await run(grants);
+  } catch (err) {
+    if (err instanceof ScopeError) return { content: err.spoken, isError: true, summary: `Files: refused — ${err.message}` };
+    const message = err instanceof Error ? err.message : String(err);
+    return { content: message, isError: true, summary: `Files: ${message}` };
+  }
+}
+
 async function withConnection(
   ctx: ToolContext,
   scope: string,
