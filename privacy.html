@@ -109,7 +109,7 @@
   <header>
     <a class="back" href="index.html">&larr; J.A.R.V.I.S.</a>
     <h1>Privacy Policy</h1>
-    <p class="updated">Last updated 29 August 2026</p>
+    <p class="updated">Last updated 30 August 2026</p>
     <div class="rule"></div>
   </header>
 
@@ -142,12 +142,24 @@
           </tr>
           <tr>
             <td>gmail.readonly</td>
-            <td>Message <strong>headers only</strong> &mdash; sender, subject, and date &mdash; plus the short preview snippet Gmail itself generates. Message bodies and attachments are never requested.</td>
+            <td>Message <strong>headers</strong> &mdash; sender, subject, and date &mdash; plus the short preview snippet Gmail itself generates. The full text of an individual message is read only if you switch that on; see below. Attachments are never read.</td>
           </tr>
         </tbody>
       </table>
     </div>
-    <p>Mail is fetched with Gmail's <code>format=metadata</code> parameter, which means full message content is never delivered to the application at all.</p>
+    <p>By default, mail is listed with Gmail's <code>format=metadata</code> parameter, so message content is not delivered to the application at all.</p>
+  </section>
+
+  <section>
+    <h2>Reading message bodies</h2>
+    <p><strong>Off by default, and separately switched on.</strong> In its default state J.A.R.V.I.S. can tell you who wrote to you and roughly what about, but cannot read the message. Reading full text is a distinct setting in the application, turned on only after a confirmation describing what follows.</p>
+    <p>With it on:</p>
+    <ul>
+      <li>The full text of a message is fetched <strong>one message at a time</strong>, only when you ask something that needs it. Searching your mail never retrieves bodies.</li>
+      <li>That text &mdash; <strong>including what other people wrote to you</strong> &mdash; is sent to the Anthropic API to produce an answer, on the same terms as the calendar and header data described above.</li>
+      <li>Long messages are truncated rather than sent whole, and attachments are still never read.</li>
+      <li>Message text is never written to disk. Turning the setting off stops it taking effect immediately.</li>
+    </ul>
   </section>
 
   <section>
