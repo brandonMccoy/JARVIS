@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>J.A.R.V.I.S.</title>
+<meta name="description" content="A local-first voice assistant that reads your calendar and mail from your own machine.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#070b12;
+    --ink-2:#0c1320;
+    --line:#18263c;
+    --text:#c3d0e2;
+    --text-dim:#7086a3;
+    --cyan:#54e6ea;
+    --amber:#f0a83c;
+    --sans:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;
+    --display:"Chakra Petch",var(--sans);
+    --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0;
+    background:var(--ink);
+    background-image:
+      radial-gradient(1100px 620px at 50% -12%, rgba(84,230,234,.13), transparent 62%),
+      radial-gradient(760px 460px at 88% 8%, rgba(240,168,60,.07), transparent 60%),
+      linear-gradient(rgba(84,230,234,.028) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(84,230,234,.028) 1px, transparent 1px);
+    background-size:auto,auto,52px 52px,52px 52px;
+    color:var(--text);
+    font:400 16px/1.65 var(--sans);
+  }
+  .wrap{max-width:760px;margin:0 auto;padding:0 24px 96px}
+
+  header{padding:88px 0 56px;position:relative}
+  .eyebrow{
+    font:500 11px/1 var(--mono);
+    letter-spacing:.34em;
+    text-transform:uppercase;
+    color:var(--cyan);
+    opacity:.85;
+    margin:0 0 22px;
+  }
+  h1{
+    font:700 clamp(40px,9vw,74px)/.98 var(--display);
+    letter-spacing:.09em;
+    margin:0;
+    color:#eaf3fb;
+    text-shadow:0 0 38px rgba(84,230,234,.24);
+  }
+  .rule{
+    height:1px;margin:30px 0 26px;
+    background:linear-gradient(90deg,var(--cyan),rgba(84,230,234,.16) 34%,transparent 72%);
+  }
+  .lede{font-size:19px;line-height:1.6;color:#d6e2f0;margin:0;max-width:56ch}
+  .lede strong{color:#fff;font-weight:500}
+
+  section{margin-top:52px}
+  h2{
+    font:700 12px/1 var(--display);
+    letter-spacing:.26em;
+    text-transform:uppercase;
+    color:var(--amber);
+    margin:0 0 20px;
+  }
+  p{margin:0 0 16px;max-width:64ch}
+
+  .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+  .card{
+    border:1px solid var(--line);
+    background:linear-gradient(180deg,rgba(12,19,32,.9),rgba(7,11,18,.6));
+    padding:20px;
+    position:relative;
+  }
+  .card::before{
+    content:"";position:absolute;inset:-1px auto auto -1px;
+    width:12px;height:12px;
+    border-top:1px solid var(--cyan);border-left:1px solid var(--cyan);
+  }
+  .card h3{
+    font:500 13px/1.3 var(--mono);
+    letter-spacing:.06em;
+    color:var(--cyan);
+    margin:0 0 8px;
+  }
+  .card p{font-size:14.5px;color:var(--text-dim);margin:0;line-height:1.6}
+
+  ul{margin:0;padding-left:20px;max-width:64ch}
+  li{margin-bottom:9px}
+  li::marker{color:var(--cyan)}
+
+  code{
+    font:400 13.5px var(--mono);
+    color:var(--amber);
+    background:rgba(240,168,60,.08);
+    border:1px solid rgba(240,168,60,.16);
+    padding:1px 6px;
+  }
+  a{color:var(--cyan);text-decoration:none;border-bottom:1px solid rgba(84,230,234,.34)}
+  a:hover{border-bottom-color:var(--cyan)}
+
+  footer{
+    margin-top:76px;padding-top:26px;
+    border-top:1px solid var(--line);
+    font:400 13.5px/1.7 var(--mono);
+    color:var(--text-dim);
+    display:flex;gap:12px 26px;flex-wrap:wrap;align-items:baseline;
+  }
+  @media (prefers-reduced-motion:no-preference){
+    header,section{animation:rise .7s cubic-bezier(.2,.7,.3,1) both}
+    section:nth-of-type(1){animation-delay:.07s}
+    section:nth-of-type(2){animation-delay:.14s}
+    section:nth-of-type(3){animation-delay:.21s}
+    @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">Local-first voice assistant</p>
+    <h1>J.A.R.V.I.S.</h1>
+    <div class="rule"></div>
+    <p class="lede">A personal voice assistant that runs entirely on <strong>your own computer</strong>. It reads your calendar and mail so it can answer questions out loud &mdash; and it never asks you to hand your account over to somebody else's server.</p>
+  </header>
+
+  <section>
+    <h2>What it does</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>calendar_today</h3>
+        <p>Reads today's events so you can ask what's coming up without opening anything.</p>
+      </div>
+      <div class="card">
+        <h3>calendar_search</h3>
+        <p>Finds events by keyword across your calendars. Read-only &mdash; it never creates or edits.</p>
+      </div>
+      <div class="card">
+        <h3>mail_unread</h3>
+        <p>Reports who wrote and roughly what about, from message headers only.</p>
+      </div>
+      <div class="card">
+        <h3>mail_search</h3>
+        <p>Searches your mail with ordinary Gmail queries and reads back the matches.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>How it is built</h2>
+    <p>J.A.R.V.I.S. runs as a process on your machine, bound to <code>127.0.0.1</code>. When you connect a Google account it uses the loopback flow described in <a href="https://www.rfc-editor.org/rfc/rfc8252.html">RFC&nbsp;8252</a>: your real system browser opens the genuine Google consent screen, and the authorization code returns to a one-shot listener on a random local port that closes the moment it is done.</p>
+    <ul>
+      <li>You supply your <strong>own</strong> Google OAuth client, so consent runs against your project, not anyone else's.</li>
+      <li>Access and refresh tokens are encrypted at rest in a local database and never reach the browser interface.</li>
+      <li>Every scope requested is <strong>read-only</strong>. Mail bodies are never fetched.</li>
+      <li>There is no J.A.R.V.I.S. server. Nothing about your account is stored anywhere but your machine.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Source &amp; privacy</h2>
+    <p>The project is open source, and the <a href="privacy.html">privacy policy</a> sets out exactly what is read, where it goes, and how to revoke access.</p>
+  </section>
+
+  <footer>
+    <span><a href="privacy.html">Privacy policy</a></span>
+    <span><a href="https://github.com/brandonMccoy/JARVIS">Source on GitHub</a></span>
+    <span>allontheone@gmail.com</span>
+  </footer>
+
+</div>
+</body>
+</html>
