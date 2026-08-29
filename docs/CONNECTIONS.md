@@ -101,13 +101,25 @@ CREATE TABLE IF NOT EXISTS connections (
 );
 ```
 
-**On encryption, honestly:** encrypting with a key file sitting in the same data
-directory stops casual disclosure — a backup, a synced folder, someone glancing
-at the DB — and stops nothing at all against code running as the user. Real
-protection needs the OS keychain (`keytar`, or Windows DPAPI via a small native
-call). Do the key file first, note the limitation in the UI, and treat the
-keychain as a follow-up rather than pretending the first version is more than it
-is.
+**On encryption, honestly:** tokens are sealed with AES-256-GCM under a key kept
+beside the database. A key file *alone* stops casual disclosure — a backup, a
+synced folder, someone glancing at the DB — and stops nothing against anyone who
+copies the directory, because they get both halves.
+
+So on Windows the key is itself wrapped with **DPAPI** (`CryptProtectData`,
+`CurrentUser` scope) before it touches disk. The data directory is then inert on
+another machine or under another Windows account. This is done by shelling out
+to PowerShell's `ProtectedData` rather than adding a native module, which keeps
+faith with the `node:sqlite` decision in PLAN §11; the key crosses on stdin, never
+argv, since command lines are readable machine-wide. Key files written before this
+are upgraded in place on first read, and the key does not change, so existing
+tokens stay readable.
+
+On macOS and Linux the key is still a bare file — see §8.
+
+**What this does not do:** DPAPI defeats a stolen directory, not a compromised
+session. Code running as this user can always ask J.A.R.V.I.S. to decrypt,
+because J.A.R.V.I.S. has to be able to. The UI should not imply otherwise.
 
 ---
 
@@ -240,9 +252,11 @@ untouched.
 
 Still open:
 
-1. **Keychain now or later?** §3 ships a key file; the OS keychain adds a native
-   dependency the project has so far avoided (`node:sqlite` was chosen
-   specifically to dodge native builds — PLAN §11).
+1. **Key protection on macOS and Linux.** Windows is done — the key is DPAPI-wrapped
+   under the current user (§3), with no native dependency. The same idea needs
+   `security add-generic-password` on macOS and libsecret on Linux, neither of
+   which has an equivalent already-installed shell out. Until then those
+   platforms keep the bare key file and the weaker guarantee that comes with it.
 2. **Is `format=metadata` enough for mail?** Bodies are deliberately never
    fetched, so he can say who wrote and roughly what about, but cannot summarise
    a thread. Raising that means pulling message bodies into core, which is a

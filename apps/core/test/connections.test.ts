@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { decryptSecret, encryptSecret } from "../src/connections/crypto.js";
 import { createPkce } from "../src/connections/oauth.js";
 import { ConnectionStore } from "../src/connections/store.js";
@@ -41,6 +41,40 @@ test("each data directory gets its own key, and that key persists", () => {
   // A different data directory must not be able to read the first one's blob.
   const other = tempDir();
   assert.notEqual(decryptSecret(other, blob), "refresh-token");
+});
+
+const onWindows = process.platform === "win32";
+
+test("on Windows the key file holds a DPAPI blob, not the raw key", { skip: !onWindows }, () => {
+  const dir = tempDir();
+  encryptSecret(dir, "refresh-token");
+
+  const contents = fs.readFileSync(path.join(dir, "connection.key"), "utf8").trim();
+  assert.ok(contents.startsWith("dpapi:"), "the key file must be DPAPI-wrapped");
+
+  // The wrapped form must not simply be the key sitting behind a prefix.
+  const body = Buffer.from(contents.slice("dpapi:".length), "base64");
+  assert.ok(body.length > 32, "a DPAPI blob is longer than the 32-byte key it protects");
+});
+
+test("a pre-DPAPI key file is upgraded in place without orphaning tokens", { skip: !onWindows }, () => {
+  const dir = tempDir();
+  const file = path.join(dir, "connection.key");
+
+  // Simulate a key written by the previous implementation: bare base64.
+  const legacyKey = randomBytes(32);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(file, legacyKey.toString("base64"));
+
+  // Encrypting reads the legacy key, so the blob is bound to it.
+  const blob = encryptSecret(dir, "refresh-token");
+  assert.ok(fs.readFileSync(file, "utf8").startsWith("dpapi:"), "the legacy key file is rewritten wrapped");
+
+  // The same key survived the upgrade, so the token is still readable — from a
+  // cold read, not the in-process cache.
+  const reread = tempDir();
+  fs.copyFileSync(file, path.join(reread, "connection.key"));
+  assert.equal(decryptSecret(reread, blob), "refresh-token");
 });
 
 test("PKCE challenge is the S256 hash of the verifier", () => {
