@@ -1,8 +1,18 @@
-import { MODELS, MODEL_ALIASES, type Settings, type SettingsPatch } from "@jarvis/shared";
+import { useState } from "react";
+import {
+  MAIL_BODIES_KEY,
+  MODELS,
+  MODEL_ALIASES,
+  mailBodiesEnabled,
+  type AppPermission,
+  type Settings,
+  type SettingsPatch,
+} from "@jarvis/shared";
 import { useStore } from "../state/store.ts";
 import { socket } from "../ws/client.ts";
 import { pickVoice } from "../voice/browserTts.ts";
 import { GoogleConnection } from "./GoogleConnection.tsx";
+import { Modal } from "../ui/Modal.tsx";
 
 /** Settings (PLAN §9). Personality has no page — it is voice-only. */
 export function SettingsPage() {
@@ -114,7 +124,14 @@ export function SettingsPage() {
                 </label>
               </div>
               {app.id === "calendar" ? (
-                app.enabled ? <GoogleConnection /> : <div className="app-status">Enable to connect an account</div>
+                app.enabled ? (
+                  <>
+                    <GoogleConnection />
+                    <MailBodiesToggle app={app} patch={patch} apps={settings.apps} />
+                  </>
+                ) : (
+                  <div className="app-status">Enable to connect an account</div>
+                )
               ) : (
                 <div className="app-status">Not wired yet</div>
               )}
@@ -135,6 +152,79 @@ function Row({ label, hint, children }: { label: string; hint?: string; children
       </span>
       <span className="sctl">{children}</span>
     </label>
+  );
+}
+
+/**
+ * Opt-in for reading message bodies (docs/CONNECTIONS.md §8).
+ *
+ * Turning it *on* is gated behind a confirmation that says plainly where the
+ * text goes, because it is the one setting here that sends the contents of
+ * other people's messages to a third party. Turning it *off* is immediate —
+ * withdrawing a permission should never need a dialogue.
+ */
+function MailBodiesToggle({
+  app,
+  apps,
+  patch,
+}: {
+  app: AppPermission;
+  apps: AppPermission[];
+  patch: (p: SettingsPatch) => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const on = mailBodiesEnabled(app);
+
+  const set = (value: boolean) =>
+    patch({
+      apps: apps.map((a) => (a.id === app.id ? { ...a, scope: { ...a.scope, [MAIL_BODIES_KEY]: value } } : a)),
+    });
+
+  return (
+    <>
+      <label className="chk mail-bodies">
+        <Toggle value={on} onChange={(v) => (v ? setConfirming(true) : set(false))} />
+        <span>Read email bodies</span>
+      </label>
+      <p className="app-status">
+        {on ? "Full message text can be read when you ask." : "Only sender, subject, date and Gmail's snippet."}
+      </p>
+
+      <Modal open={confirming} title="Allow reading email bodies?" onClose={() => setConfirming(false)}>
+        <p className="muted">
+          Right now J.A.R.V.I.S. sees only who wrote to you, the subject, the date, and the short preview Gmail
+          generates. Turning this on lets him fetch the <strong>full text</strong> of a message when you ask a question
+          that needs it.
+        </p>
+        <p className="muted">What that means in practice:</p>
+        <ul className="setup-steps">
+          <li>
+            The text of that message — <strong>including whatever other people wrote to you</strong> — is sent to the
+            Anthropic API to produce an answer, exactly as your calendar and subject lines already are.
+          </li>
+          <li>
+            Only messages you ask about. He fetches one at a time, by id, and never pulls bodies while searching.
+          </li>
+          <li>Message text is never written to disk. Nothing is stored beyond the conversation itself.</li>
+          <li>Still read-only, and still capped — long messages are truncated rather than sent whole.</li>
+        </ul>
+        <p className="muted">You can turn this back off at any time, and it takes effect on the next question.</p>
+        <div className="modal-actions">
+          <button type="button" className="ghost" onClick={() => setConfirming(false)}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              set(true);
+              setConfirming(false);
+            }}
+          >
+            Allow reading bodies
+          </button>
+        </div>
+      </Modal>
+    </>
   );
 }
 

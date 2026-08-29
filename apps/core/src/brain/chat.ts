@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createHash, randomUUID } from "node:crypto";
-import { GOOGLE_SCOPES, MODELS, type Activity, type ImagePayload, type ServerEvent, type Settings } from "@jarvis/shared";
+import { GOOGLE_SCOPES, MODELS, mailBodiesEnabled, type Activity, type ImagePayload, type ServerEvent, type Settings } from "@jarvis/shared";
 import { VOICE_SAMPLE_RATE } from "../config.js";
 import type { ConnectionStore } from "../connections/store.js";
 import type { SessionStore } from "../store/sessions.js";
@@ -245,7 +245,13 @@ export class Brain {
     if (!conns.isConnected("google")) return [];
     const allowed = new Set<string>();
     if (conns.hasScope("google", GOOGLE_SCOPES.calendarRead)) allowed.add("calendar_agenda");
-    if (conns.hasScope("google", GOOGLE_SCOPES.mailRead)) allowed.add("mail_search");
+    if (conns.hasScope("google", GOOGLE_SCOPES.mailRead)) {
+      allowed.add("mail_search");
+      // Bodies are a further opt-in on top of the mail scope: without the
+      // toggle Claude never learns the tool exists, so he cannot offer to
+      // read one and cannot be talked into trying.
+      if (mailBodiesEnabled(app)) allowed.add("mail_read");
+    }
     return CONNECTED_TOOLS.filter((t) => allowed.has(t.name)) as BetaToolUnion[];
   }
 

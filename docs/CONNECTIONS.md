@@ -257,10 +257,29 @@ Still open:
    `security add-generic-password` on macOS and libsecret on Linux, neither of
    which has an equivalent already-installed shell out. Until then those
    platforms keep the bare key file and the weaker guarantee that comes with it.
-2. **Is `format=metadata` enough for mail?** Bodies are deliberately never
-   fetched, so he can say who wrote and roughly what about, but cannot summarise
-   a thread. Raising that means pulling message bodies into core, which is a
-   real change in what this process holds.
+2. ~~**Is `format=metadata` enough for mail?**~~ **Settled: opt-in bodies.**
+   Listing still uses `format=metadata`, so searching never pulls message
+   content. A separate `mail_read` tool fetches one message with `format=full`
+   when Claude asks for it by id, walking the MIME tree for `text/plain`
+   (falling back to stripped `text/html`), skipping attachments, and truncating
+   at 4,000 characters.
+
+   It is gated three ways, because `gmail.readonly` already permitted this and
+   the only thing standing between metadata and full text was our own restraint:
+   the Calendar & Mail app must be enabled and connected, the mail scope must
+   have been granted, and **`scope.mailBodies` must be explicitly true**. Until
+   that last flag is set the tool never enters the `tools` array at all, so
+   Claude cannot offer the capability or be talked into attempting it.
+
+   The switch lives on the Calendar & Mail tile and turning it *on* requires a
+   confirmation that states where the text goes; turning it *off* is immediate,
+   since withdrawing a permission should never need a dialogue. The public
+   privacy policy carries the same disclosure — Google's Limited Use terms bind
+   the app to what that page says, so the two move together or not at all.
+
+   The real cost is unchanged from the original framing: with the flag on, the
+   contents of messages — including what other people wrote — reach the
+   Anthropic API when a question needs them. Off is still the default.
 
 [rfc8252]: https://www.rfc-editor.org/rfc/rfc8252.html
 [gauth]: https://developers.google.com/identity/protocols/oauth2

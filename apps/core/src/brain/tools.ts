@@ -110,6 +110,20 @@ export const CONNECTED_TOOLS: Tool[] = [
       additionalProperties: false,
     },
   },
+  {
+    name: "mail_read",
+    description:
+      "Read the full body of one specific email, given the id from mail_search. Use only when the sender, subject and snippet are genuinely not enough — to summarise a thread or answer a question about what a message actually says. Read-only.",
+    input_schema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "The message id, exactly as mail_search reported it." },
+      },
+      required: ["id"],
+      additionalProperties: false,
+    },
+    strict: true,
+  },
 ];
 
 export async function executeTool(name: string, input: unknown, ctx: ToolContext): Promise<ToolOutcome> {
@@ -202,8 +216,28 @@ export async function executeTool(name: string, input: unknown, ctx: ToolContext
       return withConnection(ctx, GOOGLE_SCOPES.mailRead, "mail", async (token) => {
         const messages = await google.listMessages(token, { query, maxResults: limit });
         if (!messages.length) return { content: `No messages match "${query}".`, summary: "Mail: no matches" };
-        const lines = messages.map((m) => `${m.from} — ${m.subject}\n  ${m.snippet}`);
+        // The id is what makes mail_read possible; it is never spoken aloud.
+        const lines = messages.map((m) => `[id: ${m.id}] ${m.from} — ${m.subject}\n  ${m.snippet}`);
         return { content: lines.join("\n\n"), summary: `Mail: ${messages.length} message${messages.length === 1 ? "" : "s"}` };
+      });
+    }
+
+    case "mail_read": {
+      const id = String(args.id ?? "").trim();
+      if (!id) return { content: "Provide the message id from mail_search.", isError: true, summary: "mail_read: no id" };
+      return withConnection(ctx, GOOGLE_SCOPES.mailRead, "mail", async (token) => {
+        const m = await google.getMessage(token, id);
+        if (!m.body) {
+          return {
+            content: `"${m.subject}" from ${m.from} has no readable text body — it may be attachments or images only.`,
+            summary: "Mail: no readable body",
+          };
+        }
+        const note = m.truncated ? "\n\n(Message truncated.)" : "";
+        return {
+          content: `From: ${m.from}\nSubject: ${m.subject}\nDate: ${m.date}\n\n${m.body}${note}`,
+          summary: `Mail: read "${m.subject}"`,
+        };
       });
     }
     default:

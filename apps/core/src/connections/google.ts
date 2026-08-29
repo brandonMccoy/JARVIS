@@ -206,10 +206,72 @@ export async function listEvents(
 // ---------------------------------------------------------------------------
 
 export interface MailSummary {
+  /** Gmail message id, so `mail_read` can fetch this specific message. */
+  id: string;
   from: string;
   subject: string;
   date: string;
   snippet: string;
+}
+
+export interface MailBody extends MailSummary {
+  body: string;
+  truncated: boolean;
+}
+
+/** Bodies are capped: a newsletter can be enormous and none of it is worth the context. */
+export const MAX_BODY_CHARS = 4000;
+
+interface GmailPart {
+  mimeType?: string;
+  filename?: string;
+  body?: { data?: string };
+  parts?: GmailPart[];
+}
+
+/**
+ * Depth-first search of the MIME tree for readable text.
+ *
+ * Gmail nests parts arbitrarily — multipart/alternative for text+HTML,
+ * multipart/mixed once attachments appear. `text/plain` is preferred because
+ * the HTML alternative of the same message is mostly markup; HTML is the
+ * fallback for senders who omit a plain part, which many marketing mails do.
+ * Parts with a filename are attachments and are skipped whatever their type.
+ */
+function findPart(part: GmailPart | undefined, mimeType: string): string | null {
+  if (!part) return null;
+  if (part.filename) return null; // an attachment, not the message
+  if (part.mimeType === mimeType && part.body?.data) {
+    return Buffer.from(part.body.data, "base64url").toString("utf8");
+  }
+  for (const child of part.parts ?? []) {
+    const found = findPart(child, mimeType);
+    if (found !== null) return found;
+  }
+  return null;
+}
+
+/** Crude but adequate: this text is read aloud, never rendered. */
+function stripHtml(html: string): string {
+  return html
+    .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+export function extractBody(payload: GmailPart | undefined): string {
+  const plain = findPart(payload, "text/plain");
+  if (plain !== null) return plain.replace(/\r\n/g, "\n").trim();
+  const html = findPart(payload, "text/html");
+  return html !== null ? stripHtml(html) : "";
 }
 
 export async function listMessages(
@@ -234,14 +296,48 @@ export async function listMessages(
     ),
   );
 
-  return messages.filter((m): m is NonNullable<typeof m> => m !== null).map((m) => {
-    const header = (name: string): string =>
-      m.payload?.headers?.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ?? "";
-    return {
-      from: header("From"),
-      subject: header("Subject") || "(no subject)",
-      date: header("Date"),
-      snippet: m.snippet ?? "",
-    };
-  });
+  return messages
+    .map((m, i) => (m === null ? null : { ...m, id: ids[i]!.id }))
+    .filter((m): m is NonNullable<typeof m> => m !== null)
+    .map((m) => {
+      const header = (name: string): string =>
+        m.payload?.headers?.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ?? "";
+      return {
+        id: m.id,
+        from: header("From"),
+        subject: header("Subject") || "(no subject)",
+        date: header("Date"),
+        snippet: m.snippet ?? "",
+      };
+    });
+}
+
+/**
+ * One message including its body. Separate from `listMessages` on purpose: a
+ * search that returned ten full bodies would pull far more of the mailbox into
+ * the model than any single question needs, so the body is fetched only when
+ * Claude asks for this specific message (docs/CONNECTIONS.md §8).
+ */
+export async function getMessage(accessToken: string, id: string): Promise<MailBody> {
+  const m = await apiGet<{
+    id: string;
+    snippet?: string;
+    payload?: GmailPart & { headers?: { name: string; value: string }[] };
+  }>(`${GMAIL_URL}/users/me/messages/${encodeURIComponent(id)}?format=full`, accessToken);
+
+  const header = (name: string): string =>
+    m.payload?.headers?.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ?? "";
+
+  const full = extractBody(m.payload);
+  const truncated = full.length > MAX_BODY_CHARS;
+
+  return {
+    id: m.id,
+    from: header("From"),
+    subject: header("Subject") || "(no subject)",
+    date: header("Date"),
+    snippet: m.snippet ?? "",
+    body: truncated ? `${full.slice(0, MAX_BODY_CHARS)}…` : full,
+    truncated,
+  };
 }
