@@ -9,7 +9,7 @@ import { SentenceChunker } from "../voice/chunker.js";
 import type { TtsProvider } from "../voice/tts.js";
 import { matchIntent, type Intent } from "./intents.js";
 import { buildSystem } from "./persona.js";
-import { BUILTIN_TOOLS, CONNECTED_TOOLS, FILESYSTEM_TOOLS, executeTool } from "./tools.js";
+import { BUILTIN_TOOLS, CONNECTED_TOOLS, FILESYSTEM_TOOLS, FS_WRITE_TOOLS, executeTool } from "./tools.js";
 
 type BetaMessageParam = Anthropic.Beta.BetaMessageParam;
 type BetaContentBlockParam = Anthropic.Beta.BetaContentBlockParam;
@@ -266,7 +266,7 @@ export class Brain {
     const grants = folderGrants(app);
     if (!grants.length) return [];
     const writable = grants.some((g) => g.write);
-    return FILESYSTEM_TOOLS.filter((t) => writable || t.name !== "fs_write") as BetaToolUnion[];
+    return FILESYSTEM_TOOLS.filter((t) => writable || !FS_WRITE_TOOLS.has(t.name)) as BetaToolUnion[];
   }
 
   /** Only what the gate would actually allow, so the prompt cannot overpromise. */

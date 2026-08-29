@@ -191,7 +191,39 @@ export const FILESYSTEM_TOOLS: Tool[] = [
     },
     strict: true,
   },
+  {
+    name: "fs_rename",
+    description:
+      "Rename or move a file or folder. Both the old and new paths must be inside folders Sir has marked writable, and the new path must not already exist.",
+    input_schema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Absolute path of the file or folder to rename." },
+        new_path: { type: "string", description: "Absolute path it should have afterwards, including the new name." },
+      },
+      required: ["path", "new_path"],
+      additionalProperties: false,
+    },
+    strict: true,
+  },
+  {
+    name: "fs_delete",
+    description:
+      "Delete a file or folder by moving it to the Recycle Bin, where Sir can restore it. Only folders marked writable will accept this. Say what you deleted afterwards, and mention it can be recovered from the Recycle Bin.",
+    input_schema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Absolute path of the file or folder to delete." },
+      },
+      required: ["path"],
+      additionalProperties: false,
+    },
+    strict: true,
+  },
 ];
+
+/** Tools that change the disk — offered only when some folder is writable. */
+export const FS_WRITE_TOOLS = new Set(["fs_write", "fs_rename", "fs_delete"]);
 
 export async function executeTool(name: string, input: unknown, ctx: ToolContext): Promise<ToolOutcome> {
   const args = (input ?? {}) as Record<string, unknown>;
@@ -346,6 +378,24 @@ export async function executeTool(name: string, input: unknown, ctx: ToolContext
         return {
           content: `${existed ? "Overwrote" : "Created"} ${file} (${formatBytes(bytes)}).`,
           summary: `Files: ${existed ? "overwrote" : "created"} ${basename(file)}`,
+        };
+      });
+
+    case "fs_rename":
+      return withFolders(ctx, async (grants) => {
+        const { from, to } = await files.renameEntry(grants, String(args.path ?? ""), String(args.new_path ?? ""));
+        return {
+          content: `Renamed ${from} to ${to}.`,
+          summary: `Files: renamed ${basename(from)} → ${basename(to)}`,
+        };
+      });
+
+    case "fs_delete":
+      return withFolders(ctx, async (grants) => {
+        const { path: gone, kind } = await files.deleteEntry(grants, String(args.path ?? ""));
+        return {
+          content: `Moved the ${kind} ${gone} to the Recycle Bin. It can be restored from there.`,
+          summary: `Files: recycled ${basename(gone)}`,
         };
       });
     default:

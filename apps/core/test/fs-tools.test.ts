@@ -4,9 +4,11 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { FOLDERS_KEY, KNOWN_APPS, folderGrants, type AppPermission } from "@jarvis/shared";
-import { listDir, readFile, search, writeFile, MAX_READ_BYTES } from "../src/fs/files.js";
+import { execFileSync } from "node:child_process";
+import { deleteEntry, listDir, readFile, renameEntry, search, writeFile, MAX_READ_BYTES } from "../src/fs/files.js";
+import { recycleSupported } from "../src/fs/recycle.js";
 import { ScopeError } from "../src/fs/scope.js";
-import { FILESYSTEM_TOOLS } from "../src/brain/tools.js";
+import { FILESYSTEM_TOOLS, FS_WRITE_TOOLS } from "../src/brain/tools.js";
 
 function fixture() {
   const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "jarvis-fst-")));
@@ -89,17 +91,18 @@ test("an interrupted write leaves no stray temp files", async () => {
   assert.deepEqual(leftovers, []);
 });
 
-test("fs_write is declared but only offered when a folder is writable", () => {
+test("every disk-changing tool is withheld until a folder is writable", () => {
   const names = FILESYSTEM_TOOLS.map((t) => t.name);
-  assert.deepEqual(names, ["fs_list", "fs_read", "fs_search", "fs_write"]);
+  assert.deepEqual(names, ["fs_list", "fs_read", "fs_search", "fs_write", "fs_rename", "fs_delete"]);
+  assert.deepEqual([...FS_WRITE_TOOLS].sort(), ["fs_delete", "fs_rename", "fs_write"]);
 
-  // Mirrors Brain.filesystemTools(): the write tool is filtered out when no
-  // grant permits writing, so Claude never sees a capability it cannot use.
+  // Mirrors Brain.filesystemTools(): write tools are filtered out when no grant
+  // permits writing, so Claude never sees a capability it cannot use.
   const offered = (grants: { path: string; write: boolean }[]) =>
-    FILESYSTEM_TOOLS.filter((t) => grants.some((g) => g.write) || t.name !== "fs_write").map((t) => t.name);
+    FILESYSTEM_TOOLS.filter((t) => grants.some((g) => g.write) || !FS_WRITE_TOOLS.has(t.name)).map((t) => t.name);
 
-  assert.ok(!offered(ro("/x")).includes("fs_write"));
-  assert.ok(offered(rw("/x")).includes("fs_write"));
+  assert.deepEqual(offered(ro("/x")), ["fs_list", "fs_read", "fs_search"], "read-only grants offer no way to change the disk");
+  assert.deepEqual(offered(rw("/x")), names);
 });
 
 test("the filesystem app ships with no folders, so it grants nothing", () => {
@@ -116,4 +119,83 @@ test("a malformed scope yields no access rather than all access", () => {
     { ...KNOWN_APPS[0]!, scope: {} },
   ];
   for (const app of bad) assert.deepEqual(folderGrants(app), []);
+});
+
+// ---------------------------------------------------------------------------
+// Rename and delete
+// ---------------------------------------------------------------------------
+
+test("rename moves a file and refuses to clobber an existing one", async () => {
+  const dir = fixture();
+  const from = path.join(dir, "notes.txt");
+  const to = path.join(dir, "renamed.txt");
+
+  const res = await renameEntry(rw(dir), from, to);
+  assert.equal(res.to, to);
+  assert.equal(fs.existsSync(from), false);
+  assert.match(fs.readFileSync(to, "utf8"), /meeting is on Thursday/);
+
+  fs.writeFileSync(path.join(dir, "other.txt"), "existing");
+  await assert.rejects(() => renameEntry(rw(dir), to, path.join(dir, "other.txt")), /already exists/);
+  assert.equal(fs.readFileSync(path.join(dir, "other.txt"), "utf8"), "existing", "the target is untouched");
+});
+
+test("rename is refused on a read-only grant and outside the grant", async () => {
+  const dir = fixture();
+  const outside = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "jarvis-out-")));
+
+  await assert.rejects(() => renameEntry(ro(dir), path.join(dir, "notes.txt"), path.join(dir, "x.txt")), /read-only/);
+  // A writable grant still cannot move a file out of the shared folders.
+  await assert.rejects(
+    () => renameEntry(rw(dir), path.join(dir, "notes.txt"), path.join(outside, "escaped.txt")),
+    /outside every granted folder/,
+  );
+  assert.equal(fs.existsSync(path.join(dir, "notes.txt")), true);
+});
+
+test("neither delete nor rename can remove a shared folder root", async () => {
+  const dir = fixture();
+  await assert.rejects(() => deleteEntry(rw(dir), dir), /shared folder root/);
+  await assert.rejects(() => renameEntry(rw(dir), dir, `${dir}-moved`), /shared folder root/);
+  assert.equal(fs.existsSync(dir), true);
+});
+
+test("delete is refused on a read-only grant", async () => {
+  const dir = fixture();
+  const target = path.join(dir, "notes.txt");
+  await assert.rejects(() => deleteEntry(ro(dir), target), /read-only/);
+  assert.equal(fs.existsSync(target), true, "nothing is removed when the grant refuses");
+});
+
+test("credential files cannot be overwritten, renamed or deleted either", async () => {
+  const dir = fixture();
+  const env = path.join(dir, ".env");
+  await assert.rejects(() => writeFile(rw(dir), env, "clobbered"), /denylist/);
+  await assert.rejects(() => deleteEntry(rw(dir), env), /denylist/);
+  await assert.rejects(() => renameEntry(rw(dir), env, path.join(dir, "moved.txt")), /denylist/);
+  assert.equal(fs.readFileSync(env, "utf8").trim(), "API_KEY=supersecret", "the file is untouched");
+});
+
+test("a deleted file leaves the disk and arrives in the Recycle Bin", { skip: !recycleSupported() }, async () => {
+  const dir = fixture();
+  const marker = `jarvis-recycle-${Date.now()}`;
+  const target = path.join(dir, `${marker}.txt`);
+  fs.writeFileSync(target, "recover me");
+
+  const res = await deleteEntry(rw(dir), target);
+  assert.equal(res.kind, "file");
+  assert.equal(fs.existsSync(target), false, "it is gone from disk");
+
+  // The point of the feature: it must be recoverable, not merely absent.
+  const bin = execFileSync(
+    "powershell.exe",
+    [
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
+      "$s=(New-Object -ComObject Shell.Application).Namespace(0xA); $s.Items() | ForEach-Object { $_.Name }",
+    ],
+    { encoding: "utf8", windowsHide: true },
+  );
+  assert.ok(bin.includes(marker), "the deleted file should be restorable from the Recycle Bin");
 });

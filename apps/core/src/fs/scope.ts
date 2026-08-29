@@ -154,7 +154,9 @@ export async function resolveWithin(
     );
   }
 
-  if (mode === "read" && isDenied(resolved)) {
+  // Applied to writes as well as reads: a credential file should be no more
+  // overwritable or deletable than it is readable.
+  if (isDenied(resolved)) {
     throw new ScopeError(
       `${resolved} matches the secrets denylist`,
       "That file looks like it holds credentials, so I have left it alone.",

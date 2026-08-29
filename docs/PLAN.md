@@ -362,6 +362,22 @@ and re-checks on every call, never at the moment a folder was added. Files that
 look like credentials (`.env`, keys, `.ssh`) are refused even inside a grant,
 and are not listed or searchable either.
 
+Tools: `fs_list`, `fs_read`, `fs_search` (read) and `fs_write`, `fs_rename`,
+`fs_delete` (write). The write set is withheld from the request entirely until
+some folder is writable.
+
+**Deletion is recoverable by construction.** `fs_delete` never calls `unlink`;
+it moves the item to the Recycle Bin through PowerShell's
+`Microsoft.VisualBasic.FileIO.FileSystem`, so anything removed can be restored
+from Explorer. Platforms without an implementation refuse rather than falling
+back to a permanent delete — refusing is the safe failure. Items larger than
+`MAX_RECYCLE_BYTES` are refused, because Windows bypasses the bin for those.
+
+Neither `fs_delete` nor `fs_rename` will touch a *grant root*: removing a shared
+folder from inside would be the tool dismantling its own permission. The
+credential denylist applies to writes as well as reads, so a `.env` can be
+neither read, overwritten, renamed, nor deleted.
+
 The other apps keep the chips in §6.2 unchanged.
 
 ### 6.3 Enforcement: three layers

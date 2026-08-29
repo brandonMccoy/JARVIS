@@ -1,7 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { FolderGrant } from "@jarvis/shared";
-import { isDenied, resolveWithin } from "./scope.js";
+import { isDenied, resolveWithin, ScopeError } from "./scope.js";
+import { MAX_RECYCLE_BYTES, moveToRecycleBin } from "./recycle.js";
 
 /**
  * File operations for the Filesystem app. Every one of them resolves through
@@ -166,4 +167,62 @@ export async function writeFile(
     throw err;
   }
   return { path: file, bytes: Buffer.byteLength(content, "utf8"), existed };
+}
+
+/**
+ * A shared folder is the permission itself, so deleting or renaming one from
+ * inside would be the tool dismantling its own grant. Refused.
+ */
+async function refuseIfGrantRoot(grants: FolderGrant[], resolved: string): Promise<void> {
+  for (const g of grants) {
+    const root = await fs.realpath(g.path).catch(() => null);
+    if (root && root.toLowerCase() === resolved.toLowerCase()) {
+      throw new ScopeError(
+        `${resolved} is a shared folder root`,
+        "That is one of the folders you shared with me, so I will not remove it. You can unshare it in Settings.",
+      );
+    }
+  }
+}
+
+/** Delete to the Recycle Bin. Never `unlink` — see fs/recycle.ts. */
+export async function deleteEntry(
+  grants: FolderGrant[],
+  requested: string,
+): Promise<{ path: string; kind: "file" | "folder" }> {
+  const target = await resolveWithin(grants, requested, "write");
+  await refuseIfGrantRoot(grants, target);
+
+  const stat = await fs.stat(target);
+  const kind = stat.isDirectory() ? "folder" : "file";
+  if (kind === "file" && stat.size > MAX_RECYCLE_BYTES) {
+    throw new Error(
+      `${path.basename(target)} is too large to guarantee it lands in the Recycle Bin, so I have not deleted it.`,
+    );
+  }
+
+  await moveToRecycleBin(target);
+  return { path: target, kind };
+}
+
+/**
+ * Rename or move. Both ends must sit in writable grants, so a file cannot be
+ * moved out of the folders it was shared under.
+ */
+export async function renameEntry(
+  grants: FolderGrant[],
+  requested: string,
+  requestedTo: string,
+): Promise<{ from: string; to: string }> {
+  const from = await resolveWithin(grants, requested, "write");
+  await refuseIfGrantRoot(grants, from);
+  await fs.stat(from); // must exist
+
+  const to = await resolveWithin(grants, requestedTo, "write");
+  if (await fs.stat(to).then(() => true).catch(() => false)) {
+    throw new Error(`${path.basename(to)} already exists, so I have not overwritten it.`);
+  }
+
+  await fs.rename(from, to);
+  return { from, to };
 }
